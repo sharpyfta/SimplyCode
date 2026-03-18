@@ -1,25 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Mini Minecraft</title>
+  <title>Mini Minecraft Advanced</title>
   <style>
     body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    #ui {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 5px;
+    }
+    .slot {
+      width: 40px;
+      height: 40px;
+      border: 2px solid white;
+    }
   </style>
 </head>
 <body>
 
+<div id="ui"></div>
+
 <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
 
 <script>
-// Scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-// Camera
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-
-// Renderer
 const renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -29,90 +39,148 @@ const light = new THREE.DirectionalLight(0xffffff, 1.5);
 light.position.set(10, 20, 10);
 scene.add(light);
 
-// Ground blocks
+// Blocks
 const blocks = [];
 const geometry = new THREE.BoxGeometry(1,1,1);
 const material = new THREE.MeshLambertMaterial({ color: 0x55aa55 });
 
 for (let x = -10; x < 10; x++) {
   for (let z = -10; z < 10; z++) {
-    const cube = new THREE.Mesh(geometry, material);
+    const cube = new THREE.Mesh(geometry, material.clone());
     cube.position.set(x, 0, z);
+    cube.health = 3;
     scene.add(cube);
     blocks.push(cube);
   }
 }
 
 // Player
+camera.position.set(0, 2, 5);
 let velocityY = 0;
 let canJump = false;
-
-// Camera start
-camera.position.set(0, 2, 5);
 
 // Controls
 const keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// Mouse look
-let yaw = 0;
-let pitch = 0;
-
+// Mouse
+let yaw = 0, pitch = 0;
+document.body.addEventListener("click", () => document.body.requestPointerLock());
 document.body.addEventListener("mousemove", e => {
   yaw -= e.movementX * 0.002;
   pitch -= e.movementY * 0.002;
   pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
 });
 
-document.body.addEventListener("click", () => {
-  document.body.requestPointerLock();
+// Arm
+const arm = new THREE.Mesh(
+  new THREE.BoxGeometry(0.3,0.7,0.3),
+  new THREE.MeshLambertMaterial({color:0xffcc99})
+);
+arm.position.set(0.5,-0.5,-1);
+camera.add(arm);
+scene.add(camera);
+
+let swinging=false, swingTime=0;
+
+// Raycaster (for breaking)
+const raycaster = new THREE.Raycaster();
+
+document.addEventListener("mousedown", () => {
+  swinging=true; swingTime=0;
+
+  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+  const hit = raycaster.intersectObjects(blocks)[0];
+
+  if(hit){
+    const block = hit.object;
+    block.health--;
+
+    block.material.color.set(0x884444);
+
+    if(block.health<=0){
+      scene.remove(block);
+      blocks.splice(blocks.indexOf(block),1);
+
+      // drop item
+      const drop = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3,0.3,0.3),
+        new THREE.MeshBasicMaterial({color:0xffff00})
+      );
+      drop.position.copy(block.position).add(new THREE.Vector3(0,1,0));
+      drop.isDrop=true;
+      scene.add(drop);
+    }
+  }
 });
 
 // Movement
-function movePlayer() {
-  const speed = 0.1;
+function move(){
+  const speed=0.1;
+  const forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  const right = new THREE.Vector3(forward.z,0,-forward.x);
 
-  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  if(keys["w"]) camera.position.add(forward.clone().multiplyScalar(-speed));
+  if(keys["s"]) camera.position.add(forward.clone().multiplyScalar(speed));
+  if(keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
+  if(keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
 
-  if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(speed));
-  if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(-speed));
-  if (keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
-  if (keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
-
-  // Jump
-  if (keys[" "] && canJump) {
-    velocityY = 0.2;
-    canJump = false;
+  if(keys[" "] && canJump){
+    velocityY=0.2;
+    canJump=false;
   }
 
-  // Gravity
-  velocityY -= 0.01;
-  camera.position.y += velocityY;
+  velocityY-=0.01;
+  camera.position.y+=velocityY;
 
-  if (camera.position.y < 2) {
-    camera.position.y = 2;
-    velocityY = 0;
-    canJump = true;
+  if(camera.position.y<2){
+    camera.position.y=2;
+    velocityY=0;
+    canJump=true;
   }
 }
 
+// UI (hotbar)
+const ui = document.getElementById("ui");
+for(let i=0;i<9;i++){
+  const slot=document.createElement("div");
+  slot.className="slot";
+  ui.appendChild(slot);
+}
+
+// Day/Night
+let time=0;
+
 // Animate
-function animate() {
+function animate(){
   requestAnimationFrame(animate);
 
-  movePlayer();
+  move();
 
-  camera.rotation.order = "YXZ";
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
+  // arm swing
+  if(swinging){
+    swingTime+=0.2;
+    arm.rotation.x=-Math.sin(swingTime)*1.5;
+    if(swingTime>Math.PI){
+      swinging=false;
+      arm.rotation.x=0;
+    }
+  }
 
-  renderer.render(scene, camera);
+  // day/night
+  time+=0.001;
+  const brightness=(Math.sin(time)+1)/2;
+  scene.background.setRGB(0.2*brightness,0.4*brightness,1*brightness);
+
+  camera.rotation.order="YXZ";
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  renderer.render(scene,camera);
 }
 
 animate();
 </script>
-
 </body>
 </html>
