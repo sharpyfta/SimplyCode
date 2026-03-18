@@ -76,8 +76,8 @@ function movePlayer() {
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
 
-  if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(speed));
-  if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(-speed));
+  if (keys["s"]) camera.position.add(forward.clone().multiplyScalar(speed));
+  if (keys["w"]) camera.position.add(forward.clone().multiplyScalar(-speed));
   if (keys["a"]) camera.position.add(right.clone().multiplyScalar(-speed));
   if (keys["d"]) camera.position.add(right.clone().multiplyScalar(speed));
 
